@@ -81,6 +81,12 @@ public final class HttpConnectorConfigConstants {
     public static final String KEY_STORE_TYPE = GID_CONNECTOR_HTTP
         + "security.keystore.type";
 
+    public static final String LOOKUP_REQUEST = "lookup-request";
+
+    public static final String LOOKUP_RESPONSE = "lookup-response";
+
+    public static final String FORMAT_SUFFIX = ".format";
+
     // -----------------------------------------------------
 
     // ------ HTTPS timeouts and thread pool settings ------

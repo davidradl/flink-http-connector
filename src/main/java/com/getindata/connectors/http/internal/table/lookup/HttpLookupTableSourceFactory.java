@@ -30,6 +30,8 @@ import static org.apache.flink.table.types.utils.DataTypeUtils.removeTimeAttribu
 import com.getindata.connectors.http.HttpPostRequestCallbackFactory;
 import com.getindata.connectors.http.internal.config.HttpConnectorConfigConstants;
 import com.getindata.connectors.http.internal.utils.ConfigUtils;
+import static com.getindata.connectors.http.internal.config.HttpConnectorConfigConstants.LOOKUP_REQUEST;
+import static com.getindata.connectors.http.internal.config.HttpConnectorConfigConstants.LOOKUP_RESPONSE;
 import static com.getindata.connectors.http.internal.table.lookup.HttpLookupConnectorOptions.*;
 
 public class HttpLookupTableSourceFactory implements DynamicTableSourceFactory {
@@ -57,14 +59,15 @@ public class HttpLookupTableSourceFactory implements DynamicTableSourceFactory {
             // properties coming from org.apache.flink.table.api.config.ExecutionConfigOptions
             "table.",
             HttpConnectorConfigConstants.GID_CONNECTOR_HTTP,
-            LOOKUP_REQUEST_FORMAT.key()
+            LOOKUP_REQUEST,
+            LOOKUP_RESPONSE
         );
         validateHttpLookupSourceOptions(readable);
 
         DecodingFormat<DeserializationSchema<RowData>> decodingFormat =
             helper.discoverDecodingFormat(
                 DeserializationFormatFactory.class,
-                FactoryUtil.FORMAT
+                LOOKUP_RESPONSE_FORMAT
             );
 
         HttpLookupConfig lookupConfig = getHttpLookupOptions(dynamicTableContext, readable);

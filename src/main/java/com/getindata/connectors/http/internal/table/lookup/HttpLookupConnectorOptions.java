@@ -51,7 +51,12 @@ public class HttpLookupConnectorOptions {
                 " 'HTTP/2 upgrade not supported'.");
 
     public static final ConfigOption<String> LOOKUP_REQUEST_FORMAT =
-        ConfigOptions.key("lookup-request.format")
+        ConfigOptions.key(LOOKUP_REQUEST + FORMAT_SUFFIX)
+            .stringType()
+            .defaultValue("json");
+
+    public static final ConfigOption<String> LOOKUP_RESPONSE_FORMAT =
+        ConfigOptions.key(LOOKUP_RESPONSE + FORMAT_SUFFIX)
             .stringType()
             .defaultValue("json");
 

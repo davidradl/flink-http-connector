@@ -990,9 +990,11 @@ class HttpLookupTableSourceITCaseTest {
 
     private void assertResultsForSpec(TestSpec spec, Collection<Row> rows) {
         if (spec.badStatus) {
-            assertEnrichedRowsNoDataBadStatus(rows);
-        } else if (spec.deserError) {
+            assertEnrichedRowsNoDataStatus(rows, 500, "", HttpCompletionState.HTTP_ERROR_STATUS );
+        } else if (spec.deserError && !spec.ignoreParseErrors) {
             assertEnrichedRowsDeserException(rows);
+        } else if (spec.deserError && spec.ignoreParseErrors) {
+            assertEnrichedRowsNoDataStatus(rows, 200, null, HttpCompletionState.SUCCESS);
         } else if (spec.connectionError) {
             assertEnrichedRowsException(rows);
         } else if (spec.useMetadata) {
@@ -1035,7 +1037,9 @@ class HttpLookupTableSourceITCaseTest {
         );
     }
 
-    private void assertEnrichedRowsNoDataBadStatus(Collection<Row> collectedRows ) {
+    private void assertEnrichedRowsNoDataStatus(Collection<Row> collectedRows,
+                                                int statuscode, String errStr,
+                                                HttpCompletionState httpCompletionState ) {
 
         final int rowArity = 10;
         // validate every row and its column.
@@ -1053,16 +1057,18 @@ class HttpLookupTableSourceITCaseTest {
                 assertThat(row.getField("isActive")).isNull();
                 assertThat(row.getField("balance")).isNull();
                 // metadata
-                assertThat(row.getField("errStr")).isEqualTo("");
+                assertThat(row.getField("errStr")).isEqualTo(errStr);
                 assertThat(row.getField("headers")).isNotNull();
-                assertThat(row.getField("statusCode")).isEqualTo(500);
-                assertEquals(row.getField("completionState"), HttpCompletionState.HTTP_ERROR_STATUS.name());
+                assertThat(row.getField("statusCode")).isEqualTo(statuscode);
+                assertEquals(row.getField("completionState"), httpCompletionState.name());
             }
         }
         );
     }
 
-    private void  assertEnrichedRowsDeserException(Collection<Row> collectedRows ) {
+
+
+    private void  assertEnrichedRowsDeserException(Collection<Row> collectedRows) {
 
         final int rowArity = 10;
         // validate every row and its column.
@@ -1233,7 +1239,6 @@ class HttpLookupTableSourceITCaseTest {
         wireMockServer.addStubMapping(stubMapping);
     }
 
-    // Prototype parameterizedTest
     @ParameterizedTest
     @MethodSource("testSpecProvider")
     void testHttpLookupJoinParameterized(TestSpec spec) throws Exception {
@@ -1327,6 +1332,24 @@ class HttpLookupTableSourceITCaseTest {
                 }
             }
         }
+        // Deserialization error and ignoreParseError test cases
+        for (String method : Arrays.asList("GET", "POST", "PUT")) {
+            for (boolean asyncFlag : Arrays.asList(false, true)) {
+                for (boolean continueOnError : Arrays.asList(false, true)) {
+                    specs.add(TestSpec.builder()
+                        .testName("HTTP Lookup Join With Metadata Deserialization Error")
+                        .methodName(method)
+                        .useMetadata(true)
+                        .maxRows(4)
+                        .useAsync(asyncFlag)
+                        .deserError(true)
+                        .ignoreParseErrors(true)
+                        .continueOnError(continueOnError)
+                        .build()
+                    );
+                }
+            }
+        }
 
         // Connection error test cases (testHttpLookupJoinWithMetadataException)
         for (String method : Arrays.asList("GET", "POST", "PUT")) {
@@ -1365,6 +1388,7 @@ class HttpLookupTableSourceITCaseTest {
         final int maxRows;
         final boolean useAsync;
         final boolean continueOnError;
+        final boolean ignoreParseErrors;
 
         @Override
         public String toString() {
@@ -1458,6 +1482,11 @@ class HttpLookupTableSourceITCaseTest {
         }
         sql.append("'gid.connector.http.source.lookup.header.Content-Type' = 'application/json',");
         sql.append("'gid.connector.http.source.lookup.continue-on-error'='true',");
+
+        if (spec.ignoreParseErrors) {
+            sql.append("'lookup-response.format' = 'json',"
+                + "'lookup-response.json.ignore-parse-errors' = 'true',");
+        }
         sql.append("'asyncPolling' = '").append(spec.useAsync ? "true" : "false").append("',")
             .append("'table.exec.async-lookup.buffer-capacity' = '50',")
             .append("'table.exec.async-lookup.timeout' = '120s'")

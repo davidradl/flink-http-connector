@@ -153,18 +153,61 @@ POST, PUT and GET operations. This query creator allows you to issue json reques
 your own custom http connector. The mappings from columns to the json request are supplied in the query creator configuration
 parameters `gid.connector.http.request.query-param-fields`, `gid.connector.http.request.body-fields` and `gid.connector.http.request.url-map`. 
 
-In order to use custom format, user has to specify option `'lookup-request.format' = 'customFormatName'`, where `customFormatName` is the identifier of custom format factory.
 
-Additionally, it is possible to pass query format options from table's DDL.
-This can be done by using option like so: `'lookup-request.format.customFormatName.customFormatProperty' = 'propertyValue'`, for example
+### Format considerations
+
+Flink Formats have associated configuration. There are 2 configuration options   
+- 'lookup-request.format' - this can be specified to pass format configuration to be used by the encoder. For these calls 
+'fail-on-missing-field' = 'true' can be useful if you want the call to fail when there is a missing field in the request.
+- 'lookup-response.format' - this can be specified to pass format configuration to be used by the decoder, for lookup calls. For these calls
+'ignore-parse-errors' = 'true' is useful when you would like responses that cannot be parsed be ignored (and not cause the job to fail).  
+
+It is possible to use custom formats and pass extra configuration through to them. 
+
+In order to use a custom format, user has to specify option 
+- `'lookup-request.format' = 'customFormatName'`
+- `'lookup-response.format' = 'customFormatName'`
+where `customFormatName` is the identifier of custom format factory.
+It is possible to pass query format options from table's DDL.
+
+#### 'lookup-request.format'
+
+These encoding query format options can be passed in table configuration:
+`'lookup-request.format.customFormatName.customFormatProperty' = 'propertyValue'`,
+for example
 `'lookup-request.format.customFormatName.fail-on-missing-field' = 'true'`.
 
 It is important that `customFormatName` part match `SerializationFormatFactory` identifier used for custom format implementation.
 In this case, the `fail-on-missing-field` will be passed to `SerializationFormatFactory::createEncodingFormat(
 DynamicTableFactory.Context context, ReadableConfig formatOptions)` method in `ReadableConfig` object.
 
-With default configuration, Flink-Json format is used for `GenericGetQueryCreator`, all options defined in [json-format](https://nightlies.apache.org/flink/flink-docs-master/docs/connectors/table/formats/json/)
+With default configuration, Flink Json format is used for `GenericGetQueryCreator`, all options defined in [json-format](https://nightlies.apache.org/flink/flink-docs-master/docs/connectors/table/formats/json/)
 can be passed through table DDL. For example `'lookup-request.format.json.fail-on-missing-field' = 'true'`. In this case, format identifier is `json`.
+
+#### 'lookup-response.format'
+
+These decoding query format options can be passed in table configuration::
+`'lookup-response.customFormatName.customFormatProperty' = 'propertyValue'`, 
+for example
+`'lookup-response.customFormatName.ignore-parse-errors' = 'true'`.
+
+An example using json (the default for the customformatName):
+
+```roomsql
+'format' = 'json',
+'lookup-response.format' = 'json',
+'lookup-response.json.ignore-parse-errors' = 'true',
+```
+
+Note:
+that the lookup-request is slightly different to lookup-response:
+- 'lookup-request`.format.`customFormatName.fail-on-missing-field' = 'true'
+- 'lookup-response.customFormatName.ignore-parse-errors' = 'true'
+
+The `lookup-request` parameter has `.format.` in the configuration key, but the `lookup-response` does not. `lookup-request` 
+was the original implementation, whereas `lookup-response` is inline with the way that the Kafka connector uses format names in
+configuration.  
+
 
 #### Timeouts
 Lookup Source is guarded by two timeout timers. First one is specified by Flink's AsyncIO operator that executes `AsyncTableFunction`.
@@ -190,20 +233,24 @@ Metadata columns can be specified and hold http information. They are optional r
 
 | Key                   | Data Type                        | Description                            |
 |-----------------------|----------------------------------|----------------------------------------|
-| error-string          | STRING NULL                      | A message associated with the error    |
+| error-string          | STRING NULL                      | A string associated with the error     |
 | http-status-code      | INT NULL                         | The HTTP status code                   |
 | http-headers-map      | MAP <STRING, ARRAY<STRING>> NULL | The headers returned with the response |
 | http-completion-state | STRING NULL                      | The completion state of the http call. |
 
 ##### http-completion-state possible values
 
-| Value             | Description            |
-|:------------------|------------------------|
-| SUCCESS           | Success                |
-| HTTP_ERROR_STATUS | HTTP error status code |
-| EXCEPTION         | An Exception occurred  |
+| Value                          | Description                         |
+|:-------------------------------|-------------------------------------|
+| SUCCESS                        | Success                             |
+| HTTP_ERROR_STATUS              | HTTP error status code              |
+| EXCEPTION                      | An Exception occurred               |
+| UNABLE_TO_DESERIALIZE_RESPONSE | Unable to deserialize HTTP response |
 
 If the `error-string` metadata column is defined on the table and the call succeeds then it will have a null value.
+When the HTTP response cannot be deserialized, then the `http-completion-state` will be `UNABLE_TO_DESERIALIZE_RESPONSE`
+and the `error-string` will be the response body. Note that `UNABLE_TO_DESERIALIZE_RESPONSE` is a new enum value added
+since [0.22.0], please ensure you amend your applications and SQL appropriately. 
 
 When a http lookup call fails and populates the metadata columns with the error information, the expected enrichment columns from the http call
 are not populated, this means that they will be null for nullable columns and hold a default value for the type for non-nullable columns. 
